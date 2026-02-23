@@ -444,6 +444,78 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // PROACTIVE DETECTION — Scan on paste and input, warn before user hits Enter
+  // ---------------------------------------------------------------------------
+
+  let inputDebounceTimer = null;
+  const INPUT_DEBOUNCE_MS = 400;
+
+  function attachProactiveListeners(input) {
+    if (!input || input.dataset.promptshieldAttached === 'true') return;
+    input.dataset.promptshieldAttached = 'true';
+
+    // Paste: scan immediately when user pastes (before they hit Enter)
+    input.addEventListener(
+      'paste',
+      () => {
+        getStorage().then(({ enabled }) => {
+          if (!enabled) return;
+          setTimeout(() => {
+            const text = getInputText(input);
+            const matches = scanText(text);
+            if (Object.keys(matches).length > 0) {
+              showBanner(
+                matches,
+                () => { incrementSessionCounts(matches); allowNextSend = true; hideBanner(); },
+                () => { input.focus(); hideBanner(); },
+                () => hideBanner()
+              );
+            }
+          }, 10);
+        });
+      },
+      true
+    );
+
+    // Input: debounced scan as user types (catches typed secrets)
+    input.addEventListener(
+      'input',
+      () => {
+        clearTimeout(inputDebounceTimer);
+        inputDebounceTimer = setTimeout(() => {
+          getStorage().then(({ enabled }) => {
+            if (!enabled) return;
+            const text = getInputText(input);
+            const matches = scanText(text);
+            if (Object.keys(matches).length > 0) {
+              showBanner(
+                matches,
+                () => { incrementSessionCounts(matches); allowNextSend = true; hideBanner(); },
+                () => { input.focus(); hideBanner(); },
+                () => hideBanner()
+              );
+            }
+          });
+        }, INPUT_DEBOUNCE_MS);
+      },
+      true
+    );
+  }
+
+  // Watch for prompt inputs appearing (SPA navigation, dynamic forms)
+  const observer = new MutationObserver(() => {
+    const input = findPromptInput();
+    if (input) attachProactiveListeners(input);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  const initialInput = findPromptInput();
+  if (initialInput) attachProactiveListeners(initialInput);
+
+  // ---------------------------------------------------------------------------
+  // SUBMIT INTERCEPTION — Capture send actions (backup if proactive missed)
+  // ---------------------------------------------------------------------------
+
   // Capture-phase click listener to intercept before the site handles it
   document.addEventListener(
     'click',
@@ -471,10 +543,10 @@
     true
   );
 
-  // Keyboard submit (Enter / Ctrl+Enter)
+  // Keyboard submit (Enter / Ctrl+Enter) — prevent default synchronously before any await
   document.addEventListener(
     'keydown',
-    async (e) => {
+    (e) => {
       if (e.key !== 'Enter') return;
       const isSubmit = e.ctrlKey || e.metaKey || !e.shiftKey;
       if (!isSubmit) return;
@@ -485,50 +557,50 @@
       const text = getInputText(input);
       if (!text.trim()) return;
 
-      const { enabled } = await getStorage();
-      if (!enabled) return;
-
-      const matches = scanText(text);
-      if (Object.keys(matches).length === 0) return;
-
+      // Block submit immediately so site doesn't process Enter before we finish
       e.preventDefault();
       e.stopPropagation();
 
-      lastInput = input;
-      lastSendButton = null; // Keyboard submit — we'll need to simulate click or let the site handle it after
+      (async () => {
+        const { enabled } = await getStorage();
+        if (!enabled) {
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ctrlKey: e.ctrlKey, metaKey: e.metaKey }));
+          return;
+        }
 
-      return new Promise((resolve) => {
-        showBanner(
-          matches,
-          () => {
-            incrementSessionCounts(matches);
-            // Try to trigger send: dispatch Enter, or find and click send button
-            const ev = new KeyboardEvent('keydown', {
-              key: 'Enter',
-              code: 'Enter',
-              keyCode: 13,
-              which: 13,
-              bubbles: true,
-              ctrlKey: e.ctrlKey,
-              metaKey: e.metaKey,
-            });
-            input.dispatchEvent(ev);
-            setTimeout(() => {
-              const btn = document.querySelector('button[data-testid*="send"], button[aria-label*="Send"]');
-              if (btn && getInputText(input).trim()) btn.click();
-            }, 50);
-            resolve();
-          },
-          () => {
-            input.focus();
-            resolve();
-          },
-          () => resolve()
-        );
-      });
+        const matches = scanText(text);
+        if (Object.keys(matches).length === 0) {
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ctrlKey: e.ctrlKey, metaKey: e.metaKey }));
+          return;
+        }
+
+        lastInput = input;
+        lastSendButton = null;
+
+        return new Promise((resolve) => {
+          showBanner(
+            matches,
+            () => {
+              incrementSessionCounts(matches);
+              allowNextSend = true;
+              input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ctrlKey: e.ctrlKey, metaKey: e.metaKey }));
+              setTimeout(() => {
+                const btn = document.querySelector('button[data-testid*="send"], button[aria-label*="Send"]');
+                if (btn && getInputText(input).trim()) btn.click();
+              }, 50);
+              resolve();
+            },
+            () => {
+              input.focus();
+              resolve();
+            },
+            () => resolve()
+          );
+        });
+      })();
     },
     true
   );
 
-  // Paste is allowed; we intercept and scan at submit time (click or Enter)
+  // Proactive: scan on paste and input (before Enter). Submit interception as backup.
 })();
