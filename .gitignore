@@ -1,0 +1,13 @@
+# Agent files
+agents/
+agents/**/*.md
+Agents/
+Agents/**/*.md
+
+# Work summary
+WORK_SUMMARY.md
+PLAN.md
+
+# OS
+.DS_Store
+Thumbs.db

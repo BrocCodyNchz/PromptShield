@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PromptShield</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header with extension name -->
+    <header class="popup-header">
+      <h1 class="popup-title">PromptShield</h1>
+      <p class="popup-subtitle">Sensitive data protection</p>
+    </header>
+
+    <!-- Toggle to enable/disable the extension -->
+    <section class="popup-section">
+      <label class="toggle-row">
+        <span class="toggle-label">Extension enabled</span>
+        <input type="checkbox" id="toggle-enabled" checked />
+        <span class="toggle-slider"></span>
+      </label>
+    </section>
+
+    <!-- Session warning counts by category -->
+    <section class="popup-section">
+      <h2 class="section-title">Warnings this session</h2>
+      <div id="warning-counts" class="warning-counts">
+        <p class="empty-state">No warnings yet</p>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <p class="footer-text">All scanning happens locally. No data leaves your browser.</p>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

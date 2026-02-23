@@ -1,0 +1,165 @@
+/**
+ * PromptShield Popup Styles
+ * Clean modern dark-mode aesthetic consistent with the PromptShield brand.
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  background: #0a0a0a;
+  color: #d4d4d4;
+  min-width: 320px;
+  max-width: 360px;
+}
+
+.popup-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Header */
+.popup-header {
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 12px;
+}
+
+.popup-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #00ff7f;
+  letter-spacing: -0.02em;
+}
+
+.popup-subtitle {
+  font-size: 12px;
+  color: #808080;
+  margin-top: 4px;
+}
+
+/* Sections */
+.popup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #808080;
+}
+
+/* Toggle switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.toggle-label {
+  font-size: 14px;
+  color: #d4d4d4;
+}
+
+.toggle-row input {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: #333;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #00ff7f;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-row input:checked + .toggle-slider {
+  background: rgba(0, 255, 127, 0.2);
+}
+
+.toggle-row input:checked + .toggle-slider::after {
+  transform: translateX(20px);
+}
+
+.toggle-row input:not(:checked) + .toggle-slider::after {
+  background: #666;
+}
+
+/* Warning counts list */
+.warning-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.warning-counts .empty-state {
+  font-size: 13px;
+  color: #555;
+  font-style: italic;
+}
+
+.warning-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
+
+.warning-item .category {
+  font-size: 13px;
+  color: #d4d4d4;
+}
+
+.warning-item .count {
+  font-size: 14px;
+  font-weight: 600;
+  color: #00ff7f;
+}
+
+/* Footer */
+.popup-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.footer-text {
+  font-size: 11px;
+  color: #555;
+}
+
+/* Accessibility: respect user motion preferences (Agent_Branding) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
