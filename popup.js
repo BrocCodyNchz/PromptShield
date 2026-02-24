@@ -17,23 +17,37 @@
       ? browser.storage
       : null;
 
+  const STORAGE_DEFAULTS = { enabled: true, sessionCounts: {} };
+
   async function loadState() {
-    if (!storage) return { enabled: true, sessionCounts: {} };
-    const keys = ['enabled', 'sessionCounts'];
-    const getResult = storage.local.get(keys);
-    const data = await (getResult && typeof getResult.then === 'function'
-      ? getResult
-      : new Promise((resolve) => storage.local.get(keys, resolve)));
-    return {
-      enabled: data.enabled !== false,
-      sessionCounts: data.sessionCounts || {},
-    };
+    if (!storage) return STORAGE_DEFAULTS;
+    try {
+      const keys = ['enabled', 'sessionCounts'];
+      const getResult = storage.local.get(keys);
+      const data = await (getResult && typeof getResult.then === 'function'
+        ? getResult
+        : new Promise((resolve) => storage.local.get(keys, resolve)));
+      return {
+        enabled: data.enabled !== false,
+        sessionCounts: data.sessionCounts || {},
+      };
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return STORAGE_DEFAULTS;
+      throw e;
+    }
   }
 
   async function setStorage(items) {
     if (!storage) return;
-    const result = storage.local.set(items);
-    if (result && typeof result.then === 'function') await result;
+    try {
+      const result = storage.local.set(items);
+      if (result && typeof result.then === 'function') await result;
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return;
+      throw e;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -85,11 +99,16 @@
   }
 
   storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.sessionCounts) {
-      renderCounts(changes.sessionCounts.newValue || {});
-    }
-    if (area === 'local' && changes.enabled) {
-      toggleEl.checked = changes.enabled.newValue !== false;
+    try {
+      if (area === 'local' && changes.sessionCounts) {
+        renderCounts(changes.sessionCounts.newValue || {});
+      }
+      if (area === 'local' && changes.enabled) {
+        toggleEl.checked = changes.enabled.newValue !== false;
+      }
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (!msg.includes('Extension context invalidated') && !msg.includes('context invalidated')) throw e;
     }
   });
 

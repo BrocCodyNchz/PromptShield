@@ -7,7 +7,7 @@
 - **Monitors** text being pasted or typed into the main prompt input fields on AI chat websites
 - **Scans** content for sensitive data patterns before submission
 - **Displays** a non-blocking warning banner when matches are found
-- **User choices**: "Send Anyway", "Edit First", or "Cancel"
+- **User choices**: "Edit First" or "Send Anyway"
 
 All scanning happens **locally** in the content script — zero data leaves your browser.
 
@@ -17,8 +17,8 @@ All scanning happens **locally** in the content script — zero data leaves your
 |----------|----------|
 | API keys & tokens | AWS, GitHub, Stripe, OpenAI, Google |
 | Private keys | `-----BEGIN ... PRIVATE KEY-----` |
-| Passwords | `password=`, `pwd=`, `secret=` |
-| Credit cards | Validated with Luhn algorithm |
+| Passwords | `password=`, `pwd=`, `secret=`, `password` + value (6+ chars) |
+| Credit cards | `xxxxxxxxxxxxxxxx`, `xxxx xxxx xxxx xxxx`, `xxxx-xxxx-xxxx-xxxx`, Amex `4-6-5` (Luhn-validated) |
 | Social Security Numbers | US format (XXX-XX-XXXX) |
 | Bulk emails | 3 or more in one paste |
 | Internal IPs | 10.x, 192.168.x, 172.16–31.x |
@@ -86,4 +86,4 @@ The extension icon will appear in the toolbar. Click it to view the popup with s
 - Injected into the page DOM above the chat input
 - Dismissible (× button)
 - Clean modern dark-mode aesthetic
-- Actions: **Cancel**, **Edit First**, **Send Anyway**
+- Actions: **Edit First**, **Send Anyway**

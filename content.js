@@ -66,8 +66,27 @@
       regex: /\b(?:password|pwd|passwd|secret)\s*[:=]\s*["']?[^\s"']{6,}["']?/gi,
     },
     {
+      name: CATEGORIES.PASSWORD,
+      regex: /\bpassword\s*[:=]?\s*\S{6,}/gi,
+    },
+    {
       name: CATEGORIES.CREDIT_CARD,
-      regex: /\b(?:\d[-\s]*){13,19}\b/g,
+      regex: /\b\d{13,19}\b/g,
+      validate: (m) => luhnCheck(m),
+    },
+    {
+      name: CATEGORIES.CREDIT_CARD,
+      regex: /\b\d{4}\s\d{4}\s\d{4}\s\d{4}\b/g,
+      validate: (m) => luhnCheck(m),
+    },
+    {
+      name: CATEGORIES.CREDIT_CARD,
+      regex: /\b\d{4}-\d{4}-\d{4}-\d{4}\b/g,
+      validate: (m) => luhnCheck(m),
+    },
+    {
+      name: CATEGORIES.CREDIT_CARD,
+      regex: /\b\d{4}[\s-]\d{6}[\s-]\d{5}\b/g,
       validate: (m) => luhnCheck(m),
     },
     {
@@ -157,36 +176,61 @@
       ? browser.storage
       : null;
 
+  const STORAGE_DEFAULTS = { enabled: true, sessionCounts: {} };
+
   async function getStorage() {
-    if (!storage) return { enabled: true, sessionCounts: {} };
-    const keys = ['enabled', 'sessionCounts'];
-    const getResult = storage.local.get(keys);
-    const data = await (getResult && typeof getResult.then === 'function'
-      ? getResult
-      : new Promise((resolve) => storage.local.get(keys, resolve)));
-    return {
-      enabled: data.enabled !== false,
-      sessionCounts: data.sessionCounts || {},
-    };
+    if (!storage) return STORAGE_DEFAULTS;
+    try {
+      const keys = ['enabled', 'sessionCounts'];
+      const getResult = storage.local.get(keys);
+      const data = await (getResult && typeof getResult.then === 'function'
+        ? getResult
+        : new Promise((resolve) => storage.local.get(keys, resolve)));
+      return {
+        enabled: data.enabled !== false,
+        sessionCounts: data.sessionCounts || {},
+      };
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return STORAGE_DEFAULTS;
+      throw e;
+    }
   }
 
   async function setStorage(items) {
     if (!storage) return;
-    const result = storage.local.set(items);
-    if (result && typeof result.then === 'function') await result;
+    try {
+      const result = storage.local.set(items);
+      if (result && typeof result.then === 'function') await result;
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return;
+      throw e;
+    }
   }
 
   async function setSessionCounts(counts) {
-    const { sessionCounts } = await getStorage();
-    for (const [cat, n] of Object.entries(counts)) {
-      sessionCounts[cat] = (sessionCounts[cat] || 0) + n;
+    try {
+      const { sessionCounts } = await getStorage();
+      for (const [cat, n] of Object.entries(counts)) {
+        sessionCounts[cat] = (sessionCounts[cat] || 0) + n;
+      }
+      await setStorage({ sessionCounts });
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return;
+      throw e;
     }
-    await setStorage({ sessionCounts });
   }
 
   async function incrementSessionCounts(counts) {
-    await setSessionCounts(counts);
-    // Notify popup to refresh (it will read on open)
+    try {
+      await setSessionCounts(counts);
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return;
+      throw e;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -272,11 +316,17 @@
    * @param {Function} onEditFirst - Called when user chooses Edit First
    * @param {Function} onCancel - Called when user chooses Cancel
    */
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function showBanner(matches, onSendAnyway, onEditFirst, onCancel) {
     hideBanner();
 
     const summary = Object.entries(matches)
-      .map(([cat, n]) => `${n} ${cat}`)
+      .map(([cat, n]) => `${escapeHtml(String(n))} ${escapeHtml(cat)}`)
       .join(', ');
 
     bannerEl = document.createElement('div');
@@ -284,14 +334,15 @@
     bannerEl.innerHTML = `
       <div class="promptshield-banner-inner">
         <div class="promptshield-banner-header">
-          <span class="promptshield-banner-title">PromptShield</span>
-          <button type="button" class="promptshield-banner-dismiss" aria-label="Dismiss">×</button>
+          <div class="promptshield-banner-title-row">
+            <span class="promptshield-banner-icon" aria-hidden="true">🛡</span>
+            <span class="promptshield-banner-title">PromptShield</span>
+          </div>
         </div>
         <p class="promptshield-banner-message">
-          Sensitive data detected: ${summary}. Please confirm before sending.
+          Sensitive data detected: ${summary}<br>Please confirm before sending.
         </p>
         <div class="promptshield-banner-actions">
-          <button type="button" class="promptshield-btn promptshield-btn-cancel">Cancel</button>
           <button type="button" class="promptshield-btn promptshield-btn-edit">Edit First</button>
           <button type="button" class="promptshield-btn promptshield-btn-send">Send Anyway</button>
         </div>
@@ -321,34 +372,36 @@
         box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       }
       .promptshield-banner-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         margin-bottom: 8px;
+        text-align: center;
       }
-      .promptshield-banner-title {
-        font-weight: 600;
-        color: #00ff7f;
+      .promptshield-banner-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        width: 100%;
       }
-      .promptshield-banner-dismiss {
-        background: none;
-        border: none;
-        color: #888;
-        font-size: 20px;
-        cursor: pointer;
-        padding: 0 4px;
+      .promptshield-banner-icon {
+        font-size: 40px;
         line-height: 1;
       }
-      .promptshield-banner-dismiss:hover { color: #FEFEFE; }
+      .promptshield-banner-title {
+        font-size: 36px;
+        font-weight: 700;
+        color: #00ff7f;
+        text-shadow: 0 0 20px rgba(0, 255, 127, 0.3);
+      }
       .promptshield-banner-message {
         color: #d4d4d4;
         margin: 0 0 12px 0;
         line-height: 1.4;
+        text-align: center;
       }
       .promptshield-banner-actions {
         display: flex;
         gap: 8px;
-        justify-content: flex-end;
+        justify-content: center;
       }
       .promptshield-btn {
         padding: 8px 16px;
@@ -358,11 +411,6 @@
         border: none;
         font-size: 13px;
       }
-      .promptshield-btn-cancel {
-        background: #333;
-        color: #d4d4d4;
-      }
-      .promptshield-btn-cancel:hover { background: #444; }
       .promptshield-btn-edit {
         background: #333;
         color: #00ff7f;
@@ -384,14 +432,6 @@
 
     document.body.appendChild(bannerEl);
 
-    bannerEl.querySelector('.promptshield-banner-dismiss').addEventListener('click', () => {
-      onCancel();
-      hideBanner();
-    });
-    bannerEl.querySelector('.promptshield-btn-cancel').addEventListener('click', () => {
-      onCancel();
-      hideBanner();
-    });
     bannerEl.querySelector('.promptshield-btn-edit').addEventListener('click', () => {
       onEditFirst();
       hideBanner();
@@ -524,6 +564,8 @@
         allowNextSend = false;
         return;
       }
+      // Don't intercept clicks on our own banner buttons
+      if (e.target.closest?.('#promptshield-banner')) return;
       if (!isSendButton(e.target)) return;
       const input = findPromptInput();
       if (!input) return;

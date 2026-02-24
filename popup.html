@@ -10,12 +10,15 @@
   <div class="popup-container">
     <!-- Header with extension name -->
     <header class="popup-header">
-      <h1 class="popup-title">PromptShield</h1>
-      <p class="popup-subtitle">Sensitive data protection</p>
+      <div class="popup-title-row" style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%">
+        <span class="popup-icon" aria-hidden="true" style="font-size:40px">🛡</span>
+        <h1 class="popup-title" style="font-size:36px;font-weight:700;color:#00ff7f;text-align:center;margin:0">PromptShield</h1>
+      </div>
+      <p class="popup-subtitle" style="text-align:center">Sensitive data protection</p>
     </header>
 
     <!-- Toggle to enable/disable the extension -->
-    <section class="popup-section">
+    <section class="popup-section popup-section-highlight">
       <label class="toggle-row">
         <span class="toggle-label">Extension enabled</span>
         <input type="checkbox" id="toggle-enabled" checked />
@@ -24,7 +27,7 @@
     </section>
 
     <!-- Session warning counts by category -->
-    <section class="popup-section">
+    <section class="popup-section popup-section-warnings">
       <h2 class="section-title">Warnings this session</h2>
       <div id="warning-counts" class="warning-counts">
         <p class="empty-state">No warnings yet</p>
