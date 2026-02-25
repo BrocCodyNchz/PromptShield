@@ -22,14 +22,14 @@
   async function loadState() {
     if (!storage) return STORAGE_DEFAULTS;
     try {
-      const keys = ['enabled', 'sessionCounts'];
-      const getResult = storage.local.get(keys);
-      const data = await (getResult && typeof getResult.then === 'function'
-        ? getResult
-        : new Promise((resolve) => storage.local.get(keys, resolve)));
+      const sessionStorage = storage.session || storage.local;
+      const [localData, sessionData] = await Promise.all([
+        Promise.resolve(storage.local.get(['enabled'])).then((r) => r || {}),
+        Promise.resolve(sessionStorage.get(['sessionCounts'])).then((r) => r || {}),
+      ]);
       return {
-        enabled: data.enabled !== false,
-        sessionCounts: data.sessionCounts || {},
+        enabled: (localData.enabled ?? true) !== false,
+        sessionCounts: sessionData.sessionCounts || {},
       };
     } catch (e) {
       const msg = String(e?.message || e || '');
@@ -54,8 +54,19 @@
   // Load saved state and render
   // ---------------------------------------------------------------------------
 
+  const VALID_CATEGORIES = new Set([
+    'API keys', 'Private keys', 'Passwords', 'Credit cards', 'Social Security Numbers',
+    'Bulk email addresses', 'Internal IP addresses', 'JWT tokens', '.env file contents',
+    'Connection strings',
+  ]);
+
   function renderCounts(sessionCounts) {
-    const entries = Object.entries(sessionCounts).filter(([, n]) => n > 0);
+    if (!sessionCounts || typeof sessionCounts !== 'object') {
+      countsEl.innerHTML = '<p class="empty-state">No warnings yet</p>';
+      return;
+    }
+    const entries = Object.entries(sessionCounts)
+      .filter(([cat, n]) => VALID_CATEGORIES.has(cat) && typeof n === 'number' && n > 0);
     if (entries.length === 0) {
       countsEl.innerHTML = '<p class="empty-state">No warnings yet</p>';
       return;
@@ -64,7 +75,7 @@
       .sort((a, b) => b[1] - a[1])
       .map(
         ([cat, n]) =>
-          `<div class="warning-item"><span class="category">${escapeHtml(cat)}</span><span class="count">${n}</span></div>`
+          `<div class="warning-item"><span class="category">${escapeHtml(cat)}</span><span class="count">${escapeHtml(String(Math.floor(n)))}</span></div>`
       )
       .join('');
   }
@@ -100,7 +111,8 @@
 
   storage.onChanged.addListener((changes, area) => {
     try {
-      if (area === 'local' && changes.sessionCounts) {
+      const sessionArea = storage.session ? 'session' : 'local';
+      if (area === sessionArea && changes.sessionCounts) {
         renderCounts(changes.sessionCounts.newValue || {});
       }
       if (area === 'local' && changes.enabled) {

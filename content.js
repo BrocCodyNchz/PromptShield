@@ -129,11 +129,14 @@
   // SCAN LOGIC — Runs locally, returns matches by category
   // ---------------------------------------------------------------------------
 
+  const MAX_SCAN_LENGTH = 500000; // Mitigate ReDoS on very large inputs
+
   /**
    * Scans text for sensitive data. Returns object of category -> count.
    */
   function scanText(text) {
     if (!text || typeof text !== 'string') return {};
+    if (text.length > MAX_SCAN_LENGTH) return {};
     const results = {};
     const emailMatches = [];
 
@@ -189,14 +192,14 @@
   async function getStorage() {
     if (!storage) return STORAGE_DEFAULTS;
     try {
-      const keys = ['enabled', 'sessionCounts'];
-      const getResult = storage.local.get(keys);
-      const data = await (getResult && typeof getResult.then === 'function'
-        ? getResult
-        : new Promise((resolve) => storage.local.get(keys, resolve)));
+      const sessionStorage = storage.session || storage.local;
+      const [local, session] = await Promise.all([
+        Promise.resolve(storage.local.get(['enabled'])).then((r) => r || {}),
+        Promise.resolve(sessionStorage.get(['sessionCounts'])).then((r) => r || {}),
+      ]);
       return {
-        enabled: data.enabled !== false,
-        sessionCounts: data.sessionCounts || {},
+        enabled: (local.enabled ?? true) !== false,
+        sessionCounts: session.sessionCounts || {},
       };
     } catch (e) {
       const msg = String(e?.message || e || '');
@@ -218,12 +221,15 @@
   }
 
   async function setSessionCounts(counts) {
+    const sessionStorage = storage?.session || storage?.local;
+    if (!sessionStorage) return;
     try {
       const { sessionCounts } = await getStorage();
       for (const [cat, n] of Object.entries(counts)) {
         sessionCounts[cat] = (sessionCounts[cat] || 0) + n;
       }
-      await setStorage({ sessionCounts });
+      const setResult = sessionStorage.set({ sessionCounts });
+      if (setResult && typeof setResult.then === 'function') await setResult;
     } catch (e) {
       const msg = String(e?.message || e || '');
       if (msg.includes('Extension context invalidated') || msg.includes('context invalidated')) return;
@@ -257,7 +263,13 @@
     }
     const editables = document.querySelectorAll('[contenteditable="true"]');
     for (const el of editables) {
-      if (el.offsetParent !== null && el.offsetWidth > 0 && el.innerText) {
+      if (el.offsetParent !== null && el.offsetWidth > 0) {
+        return el;
+      }
+    }
+    const roleTextbox = document.querySelectorAll('[role="textbox"]');
+    for (const el of roleTextbox) {
+      if (el.offsetParent !== null && el.offsetWidth > 0 && (el.isContentEditable || el.getAttribute('contenteditable') === 'true')) {
         return el;
       }
     }
