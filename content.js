@@ -23,6 +23,14 @@
     CONNECTION_STRING: 'Connection strings',
   };
 
+  const BANNER_BOTTOM_PX = 120;
+  const BANNER_Z_INDEX = 2147483647;
+  const BANNER_WIDTH_OFFSET_PX = 24;
+  const SEND_BUTTON_ANCESTOR_LIMIT = 8;
+  const SEND_RETRY_DELAY_MS = 50;
+  const INPUT_DEBOUNCE_MS = 400;
+  const PASTE_SCAN_DELAY_MS = 10;
+
   // ---------------------------------------------------------------------------
   // SENSITIVE DATA PATTERNS — Regex and validation logic
   // ---------------------------------------------------------------------------
@@ -304,11 +312,6 @@
     }
   }
 
-  // Layout constants — avoid magic numbers (Read&Org: named constants over magic numbers)
-  const BANNER_BOTTOM_PX = 120;
-  const BANNER_Z_INDEX = 2147483647;
-  const SEND_BUTTON_ANCESTOR_LIMIT = 8;
-
   /**
    * Shows the PromptShield warning banner above the chat input.
    * @param {Object} matches - Category -> count
@@ -322,6 +325,64 @@
     return div.innerHTML;
   }
 
+  function getBannerLogoUrl() {
+    const runtime = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : (typeof browser !== 'undefined' && browser.runtime ? browser.runtime : null);
+    return runtime ? runtime.getURL('icons/banner_logo.png') : null;
+  }
+
+  function buildBannerStyles() {
+    return `
+      #promptshield-banner {
+        position: fixed;
+        bottom: ${BANNER_BOTTOM_PX}px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: ${BANNER_Z_INDEX};
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        max-width: 480px;
+        width: calc(100% - ${BANNER_WIDTH_OFFSET_PX}px);
+      }
+      .promptshield-banner-inner {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      }
+      .promptshield-banner-header { margin-bottom: 8px; text-align: center; }
+      .promptshield-banner-title-row {
+        display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%;
+      }
+      .promptshield-banner-icon {
+        width: 40px; height: 40px; object-fit: contain; flex-shrink: 0;
+      }
+      span.promptshield-banner-icon { font-size: 40px; line-height: 1; display: inline-block; }
+      .promptshield-banner-title {
+        font-size: 36px; font-weight: 700; color: #00ff7f;
+        text-shadow: 0 0 20px rgba(0, 255, 127, 0.3);
+      }
+      .promptshield-banner-message {
+        color: #d4d4d4; margin: 0 0 12px 0; line-height: 1.4; text-align: center;
+      }
+      .promptshield-banner-actions {
+        display: flex; gap: 8px; justify-content: center;
+      }
+      .promptshield-btn {
+        padding: 8px 16px; border-radius: 8px; font-weight: 500; cursor: pointer; border: none; font-size: 13px;
+      }
+      .promptshield-btn-edit {
+        background: #333; color: #00ff7f; border: 1px solid #00ff7f;
+      }
+      .promptshield-btn-edit:hover { background: rgba(0,255,127,0.1); }
+      .promptshield-btn-send { background: #00ff7f; color: #000; }
+      .promptshield-btn-send:hover { background: #00cc66; }
+      @media (prefers-reduced-motion: reduce) {
+        #promptshield-banner * { transition: none !important; }
+      }
+    `;
+  }
+
   function showBanner(matches, onSendAnyway, onEditFirst, onCancel) {
     hideBanner();
 
@@ -329,13 +390,18 @@
       .map(([cat, n]) => `${escapeHtml(String(n))} ${escapeHtml(cat)}`)
       .join(', ');
 
+    const bannerLogoUrl = getBannerLogoUrl();
+    const iconHtml = bannerLogoUrl
+      ? `<img src="${escapeHtml(bannerLogoUrl)}" alt="PromptShield" class="promptshield-banner-icon" width="40" height="40" />`
+      : '<span class="promptshield-banner-icon" aria-hidden="true">🛡</span>';
+
     bannerEl = document.createElement('div');
     bannerEl.id = 'promptshield-banner';
     bannerEl.innerHTML = `
       <div class="promptshield-banner-inner">
         <div class="promptshield-banner-header">
           <div class="promptshield-banner-title-row">
-            <span class="promptshield-banner-icon" aria-hidden="true">🛡</span>
+            ${iconHtml}
             <span class="promptshield-banner-title">PromptShield</span>
           </div>
         </div>
@@ -349,88 +415,25 @@
       </div>
     `;
 
-    // Inject styles (scoped to our banner)
     const style = document.createElement('style');
     style.id = 'promptshield-styles';
-    style.textContent = `
-      #promptshield-banner {
-        position: fixed;
-        bottom: ${BANNER_BOTTOM_PX}px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: ${BANNER_Z_INDEX};
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-        max-width: 480px;
-        width: calc(100% - 24px);
-      }
-      .promptshield-banner-inner {
-        background: #1a1a1a;
-        border: 1px solid #333;
-        border-radius: 12px;
-        padding: 16px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-      }
-      .promptshield-banner-header {
-        margin-bottom: 8px;
-        text-align: center;
-      }
-      .promptshield-banner-title-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        width: 100%;
-      }
-      .promptshield-banner-icon {
-        font-size: 40px;
-        line-height: 1;
-      }
-      .promptshield-banner-title {
-        font-size: 36px;
-        font-weight: 700;
-        color: #00ff7f;
-        text-shadow: 0 0 20px rgba(0, 255, 127, 0.3);
-      }
-      .promptshield-banner-message {
-        color: #d4d4d4;
-        margin: 0 0 12px 0;
-        line-height: 1.4;
-        text-align: center;
-      }
-      .promptshield-banner-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: center;
-      }
-      .promptshield-btn {
-        padding: 8px 16px;
-        border-radius: 8px;
-        font-weight: 500;
-        cursor: pointer;
-        border: none;
-        font-size: 13px;
-      }
-      .promptshield-btn-edit {
-        background: #333;
-        color: #00ff7f;
-        border: 1px solid #00ff7f;
-      }
-      .promptshield-btn-edit:hover { background: rgba(0,255,127,0.1); }
-      .promptshield-btn-send {
-        background: #00ff7f;
-        color: #000;
-      }
-      .promptshield-btn-send:hover { background: #00cc66; }
-      @media (prefers-reduced-motion: reduce) {
-        #promptshield-banner * { transition: none !important; }
-      }
-    `;
+    style.textContent = buildBannerStyles();
     if (!document.getElementById('promptshield-styles')) {
       document.head.appendChild(style);
     }
 
     document.body.appendChild(bannerEl);
+
+    const bannerImg = bannerEl.querySelector('.promptshield-banner-icon[src]');
+    if (bannerImg) {
+      bannerImg.addEventListener('error', () => {
+        const span = document.createElement('span');
+        span.className = 'promptshield-banner-icon';
+        span.setAttribute('aria-hidden', 'true');
+        span.textContent = '🛡';
+        bannerImg.replaceWith(span);
+      });
+    }
 
     bannerEl.querySelector('.promptshield-btn-edit').addEventListener('click', () => {
       onEditFirst();
@@ -489,7 +492,6 @@
   // ---------------------------------------------------------------------------
 
   let inputDebounceTimer = null;
-  const INPUT_DEBOUNCE_MS = 400;
 
   function attachProactiveListeners(input) {
     if (!input || input.dataset.promptshieldAttached === 'true') return;
@@ -512,7 +514,7 @@
                 () => hideBanner()
               );
             }
-          }, 10);
+          }, PASTE_SCAN_DELAY_MS);
         });
       },
       true
@@ -629,7 +631,7 @@
               setTimeout(() => {
                 const btn = document.querySelector('button[data-testid*="send"], button[aria-label*="Send"]');
                 if (btn && getInputText(input).trim()) btn.click();
-              }, 50);
+              }, SEND_RETRY_DELAY_MS);
               resolve();
             },
             () => {
