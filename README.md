@@ -79,7 +79,7 @@ Requires conversion via Xcode or the [Safari Web Extension Packager](https://dev
 | `manifest.json` | Extension manifest (Manifest V3) |
 | `content.js` | Content script: scanning, interception, warning banner |
 | `popup.html` / `popup.js` / `popup.css` | Extension popup UI |
-| `icons/` | `logo.png` (toolbar, popup), `banner_logo.png` (warning banner) |
+| `icons/` | `banner_logo_16/32/48/128.png` (toolbar), `banner_logo.png` (popup, warning banner) |
 | `privacy-policy.html` | Privacy policy |
 
 ---
